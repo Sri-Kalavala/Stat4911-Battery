@@ -1,0 +1,363 @@
+---
+title: "Battery Project"
+author: "woessner.21"
+date: "2026-03-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+df = read.csv("C:/Users/Caleb Woessner/Downloads/merged_lz_houston_data.csv")
+```
+
+```{r}
+head(df)
+```
+
+
+```{r, warning=FALSE}
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+
+
+```
+
+```{r}
+colnames(df)[colnames(df) == 'Delivery.Date_x'] <- 'Date'
+
+colnames(df)[colnames(df) == 'Settlement.Point.Price'] <- 'Price'
+
+colnames(df)[colnames(df) == 'ACCOUNT_NUMBER'] <- 'Account'
+
+colnames(df)[colnames(df) == 'QUANTITY'] <- 'Quantity'
+
+```
+
+```{r}
+head(df)
+```
+```{r}
+any(is.na(df))
+sum(is.na(df))
+```
+
+```{r}
+df$Price = df$Price *1000
+```
+
+```{r}
+head(df)
+```
+
+```{r}
+##Split each into their own datasets
+
+df_a <- df %>% filter(Account == "account_a")
+df_b <- df %>% filter(Account == "account_b")
+```
+
+```{r}
+print(mean(df_a$Quantity))
+print(mean(df_b$Quantity))
+```
+```{r}
+print(max(df_a$Quantity))
+print(max(df_b$Quantity))
+```
+```{r}
+print(mean(df_a$Quantity)/13.5)
+print(mean(df_b$Quantity)/13.5)
+print(max(df_a$Quantity)/13.5)
+print(max(df_b$Quantity)/13.5)
+```
+
+We are all splitting up doing our own model on the same Tesla Powerall 3 with 13.5 KWH, Address NA's, change price to KWH not MWH, Do my own EDA. Should try to do this all by Monday. Create Presentation of Everything I have done
+
+Could do: Might be smart to get a table of different batteries other than PowerWall 3 just to have down. Could also look into weather data
+
+Look into Home Energy Profile so that I can market it to residents: #Households is a later issue
+
+
+Calulate how many max batteries could both accounts be using, look also at average(Caleb)
+
+```{r}
+df_a <- df_a %>%
+  mutate(
+    DateTime = ymd_hms(DateTime),
+    Date = as.Date(Date)
+  )
+
+df_b <- df_b %>%
+  mutate(
+    DateTime = ymd_hms(DateTime),
+    Date = as.Date(Date)
+  )
+
+
+```
+
+
+## EDA
+
+```{r}
+eda_summary <- function(df) {
+  df %>%
+    summarise(
+      avg_price     = mean(Price, na.rm = TRUE),
+      min_price     = min(Price, na.rm = TRUE),
+      max_price     = max(Price, na.rm = TRUE),
+      avg_quantity  = mean(Quantity, na.rm = TRUE),
+      min_quantity  = min(Quantity, na.rm = TRUE),
+      max_quantity  = max(Quantity, na.rm = TRUE),
+      n_days        = n_distinct(Date)
+    )
+}
+
+eda_summary(df_a)
+eda_summary(df_b)
+```
+
+### Account A
+```{r}
+ggplot(df_a, aes(DateTime, Price)) +
+  geom_line() +
+  labs(title = "Price over time – Account A", y = "Price ($/kWh)")
+```
+
+```{r}
+df_a %>%
+  group_by(Hour) %>%
+  summarise(avg_qty = mean(Quantity, na.rm = TRUE)) %>%
+  ggplot(aes(Hour, avg_qty)) +
+  geom_line() +
+  labs(title = "Average Quantity by Hour – Account A", y = "Quantity")
+```
+
+```{r}
+df_a %>%
+  group_by(Hour) %>%
+  summarise(avg_price = mean(Price)) %>%
+  ggplot(aes(Hour, avg_price)) +
+  geom_line() +
+  labs(title = "Average Price by Hour – Account A")
+```
+
+
+```{r}
+df_a %>%
+  group_by(Month) %>%
+  summarise(
+    avg_qty   = mean(Quantity, na.rm = TRUE),
+    avg_price = mean(Price, na.rm = TRUE)
+  ) %>%
+  ggplot(aes(Month, avg_qty)) +
+  geom_col() +
+  labs(title = "Average Monthly Quantity – Account A", y = "Quantity")
+```
+
+
+
+### Account B
+
+```{r}
+ggplot(df_b, aes(DateTime, Price)) +
+  geom_line() +
+  labs(title = "Price over time – Account B", y = "Price ($/kWh)")
+```
+
+```{r}
+df_b %>%
+  group_by(Hour) %>%
+  summarise(avg_qty = mean(Quantity, na.rm = TRUE)) %>%
+  ggplot(aes(Hour, avg_qty)) +
+  geom_line() +
+  labs(title = "Average Quantity by Hour – Account B", y = "Quantity")
+```
+
+```{r}
+df_b %>%
+  group_by(Month) %>%
+  summarise(
+    avg_qty   = mean(Quantity, na.rm = TRUE),
+    avg_price = mean(Price, na.rm = TRUE)
+  ) %>%
+  ggplot(aes(Month, avg_qty)) +
+  geom_col() +
+  labs(title = "Average Monthly Quantity – Account B", y = "Quantity")
+```
+
+## Ideal Number of Batteries
+
+Doing this based on the Powerall 3 Tesla battery with a capacity of 13.5 kWh
+
+```{r}
+battery_cap <- 13.5
+
+batt_stats <- function(df) {
+  df <- df %>%
+    mutate(batt_equiv = Quantity / battery_cap)
+  
+  max_batt <- ceiling(max(df$batt_equiv, na.rm = TRUE))
+  
+  daily_energy <- df %>%
+    group_by(Date) %>%
+    summarise(total_kwh = sum(Quantity, na.rm = TRUE))
+  
+  ideal_batt <- mean(daily_energy$total_kwh) / battery_cap
+  
+  list(
+    max_batt   = max_batt,
+    ideal_batt = ideal_batt
+  )
+}
+
+batt_stats(df_a)
+batt_stats(df_b)
+```
+SO the Ideeal battery is the typical number of batteries used. Calculated by finding the average daily energy and deviding it by 13.5
+The max is found by what it is during the worst interval of time. So ideal battery is about 1 for a and about 18 for B
+
+This is still Naive but want to get a general idea.
+
+
+## Simple Naive approach Optimization Model For Model A(account A)
+
+Goal: Charge during cheap hours, discharge during peak hours, and want to track the state of charge
+
+I will use Hour only. Want to charge during 10-15 and discharge during 20-03 which is during the highest quantity used for A
+
+
+```{r}
+df_a <- df_a %>%
+  mutate(
+    action = case_when(
+      Hour %in% 10:15 ~ "discharge",
+      Hour %in% c(20:23, 0:3) ~ "charge",
+      TRUE ~ "idle"
+    )
+  )
+```
+
+```{r}
+df_a$charge_kwh    <- 0
+df_a$discharge_kwh <- 0
+df_a$soc           <- NA
+
+soc <- 0.5 * battery_cap  # start at 50%
+
+for (i in 1:nrow(df_a)) {
+  act <- df_a$action[i]
+  
+  if (act == "charge" && soc < battery_cap) {
+    charge <- min(1, battery_cap - soc)
+    soc <- soc + charge
+    df_a$charge_kwh[i] <- charge
+  } else if (act == "discharge" && soc > 0) {
+    discharge <- min(1, soc)
+    soc <- soc - discharge
+    df_a$discharge_kwh[i] <- discharge
+  }
+  
+  df_a$soc[i] <- soc
+}
+```
+
+Cost without battery:
+```{r}
+cost_no_batt_a <- sum(df_a$Quantity * df_a$Price, na.rm = TRUE)
+```
+
+```{r}
+df_a <- df_a %>%
+  mutate(
+    grid_import = Quantity - discharge_kwh + charge_kwh,
+    grid_import = pmax(grid_import, 0)
+  )
+
+cost_with_batt_a <- sum(df_a$grid_import * df_a$Price, na.rm = TRUE)
+
+savings_a <- cost_no_batt_a - cost_with_batt_a
+```
+
+```{r}
+print(cost_no_batt_a)
+print(cost_with_batt_a)
+```
+```{r}
+print(savings_a)
+```
+
+As we can see we are losing money with this model due to just going based on Quantity per hour instead of price.
+
+Now want to do hours between 17 and 22 to discharge(5-10 PM) and between 0 and 5(12- 5 AM) which showed the highest price per hour for account A
+
+```{r}
+##Assign discharge and charge values
+df_a <- df_a %>%
+  mutate(
+    action = case_when(
+      Hour %in% 17:22 ~ "discharge",
+      Hour %in% c(0:5) ~ "charge",
+      TRUE ~ "idle"
+    )
+  )
+```
+
+For now I want to think about charging and discharging at 1kWh just to get the idea of what times would be good
+```{r}
+##SOC = State of Charge
+df_a$charge_kwh    <- 0
+df_a$discharge_kwh <- 0
+df_a$soc           <- NA
+
+soc <- 0.5 * battery_cap  # start at 50%
+
+for (i in 1:nrow(df_a)) {
+  act <- df_a$action[i]
+  
+  if (act == "charge" && soc < battery_cap) {
+    charge <- min(1, battery_cap - soc)
+    soc <- soc + charge
+    df_a$charge_kwh[i] <- charge
+  } else if (act == "discharge" && soc > 0) {
+    discharge <- min(1, soc)
+    soc <- soc - discharge
+    df_a$discharge_kwh[i] <- discharge
+  }
+  
+  df_a$soc[i] <- soc
+}
+```
+
+Cost without battery:
+```{r}
+cost_no_batt_a <- sum(df_a$Quantity * df_a$Price, na.rm = TRUE)   ##Just quantity times price of the hour
+```
+
+Using Battery
+```{r}
+## Grid = Load-dishcarge + charge
+df_a <- df_a %>%
+  mutate(
+    grid_import = Quantity - discharge_kwh + charge_kwh,
+    grid_import = pmax(grid_import, 0)
+  )
+
+cost_with_batt_a <- sum(df_a$grid_import * df_a$Price, na.rm = TRUE)
+
+savings_a <- cost_no_batt_a - cost_with_batt_a
+```
+
+```{r}
+print(cost_no_batt_a)
+print(cost_with_batt_a)
+```
+```{r}
+print(savings_a)
+```
+
+When running on discharging with higher price, versus charging on low price we actually get some good savings.
