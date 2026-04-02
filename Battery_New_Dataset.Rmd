@@ -1,0 +1,171 @@
+---
+title: "Battery_New_Dataset"
+author: "Srinika Kalavala"
+date: "2026-03-31"
+output: html_document
+---
+
+```{r}
+### Libraries
+library(dplyr)
+library(terra)
+library(glmnet)
+```
+
+
+
+```{r}
+### Load the data
+weather_data_august_2022 <- rast("/Users/srinika/Desktop/OSU/Junior Year/Spring/STAT 4911/Battery Project/data.grib")
+print(weather_data_august_2022)
+
+### Picking the center of Houston
+pt <- data.frame(x = -95.375, y = 29.75)
+pt_vect <- vect(pt, geom = c("x", "y"), crs = "EPSG:4326")
+weather_df <- extract(weather_data_august_2022, pt_vect)
+
+### Cleaning the weather data
+weather_df <- weather_df[,-1]
+#dim(weather_df)
+weather_mat <- t(weather_df)
+#dim(weather_mat)
+weather_mat <- matrix(weather_mat, nrow = 744, byrow = TRUE)
+#dim(weather_mat)
+weather_df_clean <- as.data.frame(weather_mat)
+
+### Created a Datetime column so that each row is labeled with the hour it represents
+weather_df_clean$Datetime <- seq(
+  from = as.POSIXct("2022-08-01 00:00", tz="UTC"),
+  by = "hour",
+  length.out = 744
+)
+
+### Convert the timezones
+weather_df_clean$Datetime <- as.POSIXct(weather_df_clean$Datetime, tz = "UTC")
+# Houston is central time
+weather_df_clean$Datetime <- format(weather_df_clean$Datetime, tz = "America/Chicago")
+weather_df_clean$Datetime <- as.POSIXct(weather_df_clean$Datetime)
+
+#View(weather_df_clean)
+```
+
+```{r}
+#names(weather_data_august_2022)
+var_dict <- data.frame(
+  column = paste0("V", 1:142),
+  grib_name = names(weather_data_august_2022)
+)
+#print(var_dict)
+```
+
+
+```{r}
+### Load the dataset
+battery_dataset = read.csv("~/Desktop/OSU/Junior Year/Spring/STAT 4911/Battery Project/battery_dataset_20260327.csv")
+
+#dim(battery_dataset)
+#colnames(battery_dataset)
+
+# Filter the dataset to August 2022
+battery_dataset_aug_2022 <- battery_dataset %>%
+  mutate(Datetime = as.POSIXct(Datetime, format = "%m/%d/%y %H:%M")) %>%
+  filter(Datetime >= as.POSIXct("2022-08-01 00:00") &
+         Datetime <  as.POSIXct("2022-09-01 00:00"))
+
+#dim(battery_dataset_aug_2022)
+#colnames(battery_dataset_aug_2022)
+```
+
+```{r}
+### Merging the datasets
+merged_data <- battery_dataset_aug_2022 %>%
+  inner_join(weather_df_clean, by = "Datetime")
+#dim(merged_data)
+
+### Get rid of features not needed for this model and also want only numeric
+model_data <- merged_data %>%
+  select(-Date, -AccountNumber, -UnitOfMeasure, -PriceUnits) %>%
+  select(where(is.numeric))
+model_data$Datetime <- merged_data$Datetime
+#summary(merged_data$SettlementPointPrice)
+
+# Adding in time
+model_data <- model_data %>%
+  mutate(
+    hour = as.numeric(format(Datetime, "%H")),
+    day = as.numeric(format(Datetime, "%d"))
+  )
+
+# Had a datatype issue so I changes SettlementPointPrice to numeric
+merged_data$SettlementPointPrice <- as.numeric(merged_data$SettlementPointPrice)
+
+# Removed V6 because almost every row is missing
+model_data <- model_data %>%
+  select(-V6)
+
+# Cleaning the NA's
+model_data <- na.omit(model_data)
+
+#colSums(is.na(model_data))
+#dim(model_data)
+#dim(model_data)
+```
+
+```{r}
+### Modeling
+# Decided to do a LASSO because we have a high-dimensional dataset
+X <- model.matrix(SettlementPointPrice ~ . -Datetime, data = model_data)[,-1]
+y <- log(model_data$SettlementPointPrice)
+
+# Train/Test
+set.seed(4911)
+train_idx <- sample(1:nrow(X), 0.8 * nrow(X))
+X_scaled <- scale(X)
+X_scaled <- X_scaled[, colSums(is.na(X_scaled)) == 0]
+X_train <- X_scaled[train_idx, ]
+y_train <- y[train_idx]
+X_test  <- X_scaled[-train_idx, ]
+y_test <- y[-train_idx]
+
+# Training model
+lasso_model <- cv.glmnet(X_train, y_train, alpha = 1)
+plot(lasso_model)
+
+# Performance metrics
+pred_log <- predict(lasso_model, s = "lambda.min", newx = X_test)
+pred <- exp(pred_log)
+y_test_original <- exp(y_test)
+mse <- mean((pred - y_test_original)^2)
+mse
+
+# Get the coefficient matrix from the LASSO model
+coef_matrix <- coef(lasso_model, s = "lambda.min")
+coef_vec <- as.vector(coef_matrix)
+names(coef_vec) <- rownames(coef_matrix)
+coef_vec_no_intercept <- coef_vec[-1]
+v_names <- names(coef_vec_no_intercept)
+# Map the names
+v_to_grib <- setNames(var_dict$grib_name, var_dict$column)
+names(coef_vec_no_intercept) <- v_to_grib[v_names]
+coef_vec_named <- c("(Intercept)" = coef_vec[1], coef_vec_no_intercept)
+
+
+### Drop the zeros and the intercept
+active_coefs <- coef_vec_named[coef_vec_named != 0]
+active_coefs <- active_coefs[names(active_coefs) != "(Intercept)"]
+sorted_coefs <- sort(active_coefs, decreasing = TRUE)
+top_10_positive <- head(sorted_coefs, 10)
+top_10_negative <- tail(sorted_coefs, 10)
+
+print("--- Top 10 Positive Drivers ---")
+print(top_10_positive)
+
+print("--- Top 10 Negative Drivers ---")
+print(top_10_negative)
+```
+
+
+
+
+```
+
