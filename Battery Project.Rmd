@@ -1,0 +1,258 @@
+---
+title: "Battery Project"
+author: "Bhavin Bohre"
+date: "2026-03-24"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(tidyr)
+library(lubridate)
+```
+
+```{r}
+battery = read.csv("battery_dataset_20260327.csv")
+```
+
+```{r}
+colSums(is.na(battery))
+```
+
+```{r}
+battery[!complete.cases(battery), ]
+```
+
+```{r}
+battery = battery[!(is.na(battery$Quantity)), ]
+```
+
+```{r}
+account_a = subset(battery, AccountNumber == "account_a")
+
+account_b = subset(battery, AccountNumber == "account_b")
+```
+
+```{r}
+ggplot(account_a, aes(y = Quantity)) +
+geom_boxplot(fill = "royalblue", alpha = 0.6) +
+labs(title = "Distribution of Quantity", y = "Quantity") +
+theme_minimal()
+```
+
+
+```{r}
+ggplot(account_a, aes(x = Quantity)) +
+geom_density(fill = "royalblue", alpha = 0.4) +
+labs(title = "Density Plot of Quantity", x = "Quantity", y = "Density") +
+theme_minimal()
+```
+
+```{r}
+# Calculate interquartile range for quantity
+Q1 = quantile(account_a$Quantity, 0.25, na.rm = TRUE)
+Q3 = quantile(account_a$Quantity, 0.75, na.rm = TRUE)
+IQR_value = IQR(account_a$Quantity, na.rm = TRUE)
+
+# Set the bounds for outliers
+lower_bound = Q1 - 1.5 * IQR_value
+upper_bound = Q3 + 1.5 * IQR_value
+
+# Remove rows that have outlier values in quantity column
+account_a = subset(account_a, Quantity >= lower_bound & Quantity <= upper_bound)
+```
+
+```{r}
+ggplot(account_a, aes(y = Quantity)) +
+geom_boxplot(fill = "royalblue", alpha = 0.6) +
+labs(title = "Distribution of Quantity", y = "Quantity") +
+theme_minimal()
+```
+
+```{r}
+ggplot(account_a, aes(x = Quantity)) +
+geom_density(fill = "royalblue", alpha = 0.4) +
+labs(title = "Density Plot of Quantity", x = "Quantity", y = "Density") +
+theme_minimal()
+```
+```{r}
+account_a$log_quantity = log(account_a$Quantity)
+```
+
+```{r}
+ggplot(account_a, aes(x = log_quantity)) +
+geom_density(fill = "royalblue", alpha = 0.4) +
+labs(title = "Density Plot of Log Quantity", x = "Log Quantity", y = "Density") +
+theme_minimal()
+```
+
+```{r warning = FALSE}
+account_a$Datetime = mdy_hm(account_a$Datetime)
+
+account_a$Season = factor(
+  case_when(
+    month(account_a$Datetime) %in% c(3,4,5) ~ "Spring",
+    month(account_a$Datetime) %in% c(6,7,8) ~ "Summer",
+    month(account_a$Datetime) %in% c(9,10,11) ~ "Fall",
+    TRUE ~ "Winter"
+  ),
+  levels = c("Spring", "Summer", "Fall", "Winter")
+)
+
+ggplot(account_a, aes(x = Datetime, y = Quantity, color = Season)) +
+geom_line() + scale_x_datetime(date_breaks = "2 month", date_labels = "%m/%y"
+) + labs(title = "Quantity Energy Used vs Season", x = "Date",
+y = "Quantity") + theme_minimal()
+```
+
+```{r}
+# Get the time from the DateTime variable
+account_a$Time = format(account_a$Datetime, "%H:%M")
+
+# Create TimeOfDay variable to separate timing of each day
+account_a$TimeOfDay = with(account_a, ifelse(
+  Time > "05:00" & Time <= "12:00", "Morning",
+  ifelse(Time > "12:00" & Time <= "17:00", "Afternoon",
+  ifelse(Time > "17:00" & Time <= "20:00", "Evening",
+  "Night"))))
+
+# Look at average energy used for time of day
+quant_avg = account_a %>% group_by(TimeOfDay) %>%
+summarise(avg_quantity = mean(Quantity, na.rm = TRUE))
+
+quant_avg <- quant_avg %>% drop_na(TimeOfDay)
+
+ggplot(quant_avg, aes(x = TimeOfDay, y = avg_quantity, fill = TimeOfDay)) +
+geom_col() + labs(title = "Average Quantity by Time of Day",
+x = "Time of Day", y = "Average Quantity") + theme_minimal()
+```
+
+```{r}
+# Plot energy used by time of day
+ggplot(account_a, aes(x = Datetime, y = Quantity)) +
+geom_line(color = "steelblue") + scale_x_datetime(date_breaks = "2 month",
+date_labels = "%m/%y") +
+facet_wrap(~ TimeOfDay, ncol = 1, scales = "free_x") +
+labs(title = "Quantity vs Time of Day", x = "Date", y = "Quantity"
+) + theme_minimal()
+```
+
+```{r}
+# Convert price from megawatt hours to kilowatt hours
+account_a$Settlement.Point.Price.KWH = account_a$SettlementPointPrice / 1000
+```
+
+```{r}
+ggplot(account_a, aes(y = Settlement.Point.Price.KWH)) +
+geom_boxplot(fill = "royalblue", alpha = 0.6) +
+labs(title = "Distribution of Price Point", y = "Price Point") +
+theme_minimal()
+```
+
+```{r}
+ggplot(account_a, aes(x = Settlement.Point.Price.KWH)) +
+geom_density(fill = "royalblue", alpha = 0.4) +
+labs(title = "Density Plot of Price Point", x = "Price Point", y = "Density") +
+theme_minimal()
+```
+
+```{r}
+# Calculate interquartile range for quantity
+Q1 = quantile(account_a$Settlement.Point.Price.KWH, 0.25, na.rm = TRUE)
+Q3 = quantile(account_a$Settlement.Point.Price.KWH, 0.75, na.rm = TRUE)
+IQR_value = IQR(account_a$Settlement.Point.Price.KWH, na.rm = TRUE)
+
+# Set the bounds for outliers
+lower_bound = Q1 - 1.5 * IQR_value
+upper_bound = Q3 + 1.5 * IQR_value
+
+# Remove rows that have outlier values in quantity column
+account_a = subset(account_a, Settlement.Point.Price.KWH >= lower_bound 
+& Settlement.Point.Price.KWH <= upper_bound)
+```
+
+```{r}
+ggplot(account_a, aes(y = Settlement.Point.Price.KWH)) +
+geom_boxplot(fill = "royalblue", alpha = 0.6) +
+labs(title = "Distribution of Price Point", y = "Price Point") +
+theme_minimal()
+```
+
+```{r}
+ggplot(account_a, aes(x = Settlement.Point.Price.KWH)) +
+geom_density(fill = "royalblue", alpha = 0.4) +
+labs(title = "Density Plot of Price Point", x = "Price Point", y = "Density") +
+theme_minimal()
+```
+
+```{r warning = FALSE}
+account_a$log_price_point_KWH = log(account_a$Settlement.Point.Price.KWH)
+ggplot(account_a, aes(x = log_price_point_KWH)) +
+geom_density(fill = "royalblue", alpha = 0.4) +
+labs(title = "Density Plot of Log Price", x = "Log Price", y = "Density") +
+theme_minimal()
+```
+
+```{r}
+write.csv(account_a, "account_a.csv", row.names = FALSE)
+```
+
+
+## Optimization Variable:
+
+$x_A$ = Number of batteries needed for account A
+
+$\text{charge}_{A,t,d}$ = charge stored in the batteries for account A at hour $t$ on day $d$ where $t = 0,...,23$ and $d = 1,...,14$ (Starting With 2 Week Period First) 
+
+$y_{b,A,t,d}$ = Whether battery $b$ for account A is charging at time $t$ on day $d$ or not
+
+$e_{A,b}$ = Whether battery $b$ exists for account A
+
+$g_{A,t,d}$ = Quantity energy discharged from the battery at hour $t$ on day $d$
+
+$\text{charge}_{A,d,t}$ = Charge in the battery
+
+$\text{discharge}_{A,d,t}$ = Energy being discharged in the battery
+
+## Constants:
+
+$B^{max} = 30$ = Number of batteries (Set to realistic high value for 2 week period Gurobi will not use all if not needed)
+
+$C_{battery}$ = Amount of money the battery costs (11,959 Tesla Powerwall 3)
+
+$\text{Quantity}_{A,t,d}$ = Quantity of energy used for account A at hour $t$ on day $d$
+
+$\text{Price}_{t,d}$ = Price of energy at hour $t$ on day $d$
+
+$R_{charge}$ = Charge rate of the Tesla Powerwall $3$ in kWh
+
+$R_{discharge}$ = Discharge rate of the Tesla Powerwall $3$ in kWh
+
+## Constraints:
+
+$10.8 * x_A <= \text{CS}_{A,d,t} <= 13.5 * x_A$: Charge state for battery system through 2 weeks must must be at a minimum $80\%$ 
+
+$y_{b,A,t,d} <= e_{A,b}$: Battery can only charge if it exists
+
+$\sum_{b=1}^{B^{\max}} e_{A,b} = x_A$: Number of active batteries is the exact same as the ones needs for account $i$
+
+$g_{A,t,d} = \text{Quantity}_{A,t,d}$: Energy demand must be met by battery usage
+
+$\text{charge}_{A,d,t} <= R_{charge} * x_A$: Charge rate limit
+
+$\text{discharge}_{A,d,t} <= R_{discharge} * x_A$: Discharge rate limit
+
+$13.5 * x_A + \text{charge}_{A,1,0} - \text{discharge}_{A,1,0} = \text{CS}_{A,1,0}$: Initial energy within the first hour of usage
+
+$\text{CS}_{A,d',t'} * x_A + \text{charge}_{A,d,t} - \text{discharge}_{A,d,t} = \text{CS}_{A,d,t}$: Energy in the battery at the current time of the day after the first hour
+
+## Notes:
+
+$d',t'$ = Indicates previous day and previous hour in time
+
+## Objective Function:
+
+$min(\sum_{d = 1}^{14} \sum_{t = 0}^{23} (\text{charge}_{A,d,t} \cdot \text{Price}_{t,d}) + x_A * C_{battery})$
