@@ -197,7 +197,39 @@ theme_minimal()
 ```
 
 ```{r}
-write.csv(account_a, "account_a.csv", row.names = FALSE)
+#write.csv(account_a, "account_a.csv", row.names = FALSE)
+```
+
+```{r}
+Q1 = quantile(account_b$Quantity, 0.25, na.rm = TRUE)
+Q3 = quantile(account_b$Quantity, 0.75, na.rm = TRUE)
+IQR_value = IQR(account_b$Quantity, na.rm = TRUE)
+
+lower_bound = Q1 - 1.5 * IQR_value
+upper_bound = Q3 + 1.5 * IQR_value
+
+account_b = subset(account_b, Quantity >= lower_bound & Quantity <= upper_bound)
+```
+
+```{r}
+account_b$Datetime <- mdy_hm(account_b$Datetime, quiet = TRUE)
+account_b$Settlement.Point.Price.KWH = account_b$SettlementPointPrice / 1000
+```
+
+```{r}
+Q1 = quantile(account_b$Settlement.Point.Price.KWH, 0.25, na.rm = TRUE)
+Q3 = quantile(account_b$Settlement.Point.Price.KWH, 0.75, na.rm = TRUE)
+IQR_value = IQR(account_b$Settlement.Point.Price.KWH, na.rm = TRUE)
+
+lower_bound = Q1 - 1.5 * IQR_value
+upper_bound = Q3 + 1.5 * IQR_value
+
+account_b = subset(account_b, Settlement.Point.Price.KWH >= lower_bound 
+& Settlement.Point.Price.KWH <= upper_bound)
+```
+
+```{r}
+View(account_b)
 ```
 
 
@@ -205,17 +237,21 @@ write.csv(account_a, "account_a.csv", row.names = FALSE)
 
 $x_A$ = Number of batteries needed for account A
 
-$\text{charge}_{A,t,d}$ = charge stored in the batteries for account A at hour $t$ on day $d$ where $t = 0,...,23$ and $d = 1,...,14$ (Starting With 2 Week Period First) 
+$\text{charge}_{A,t,d}$ = charge stored in all batteries for account A at hour $t$ on day $d$ where $t = 0,...,23$ and $d = 1,...,14$ (Starting With 2 Week Period First) 
 
 $y_{b,A,t,d}$ = Whether battery $b$ for account A is charging at time $t$ on day $d$ or not
 
 $e_{A,b}$ = Whether battery $b$ exists for account A
 
-$g_{A,t,d}$ = Quantity energy discharged from the battery at hour $t$ on day $d$
+$g_{A,t,d}$ = Quantity energy discharged from all batteries at hour $t$ on day $d$
 
-$\text{charge}_{A,d,t}$ = Charge in the battery
+$\text{discharge}_{A,d,t}$ = Energy being discharged in all battery for Account A at hour $t$ on day $d$ where $t = 0,...,23$ and $d = 1,...,14$ (Starting With 2 Week Period First)
 
-$\text{discharge}_{A,d,t}$ = Energy being discharged in the battery
+$\text{CS}_{A,d,t}$ = Charging state of all batteries in Account A at time $t$ on day $d$
+
+$\text{charge}_{A,b,t,d}$ = Charge for battery $b$ at time $t$ on day $d$ for Account A
+
+$\text{discharge}_{A,b,d,t}$ = Discharge for battery $b$ at time $t$ on day $d$ for Account A
 
 ## Constants:
 
@@ -227,9 +263,9 @@ $\text{Quantity}_{A,t,d}$ = Quantity of energy used for account A at hour $t$ on
 
 $\text{Price}_{t,d}$ = Price of energy at hour $t$ on day $d$
 
-$R_{charge}$ = Charge rate of the Tesla Powerwall $3$ in kWh
+$R_{charge}$ = Charge rate per battery of the Tesla Powerwall $3$ in kWh
 
-$R_{discharge}$ = Discharge rate of the Tesla Powerwall $3$ in kWh
+$R_{discharge}$ = Discharge rate per battery of the Tesla Powerwall $3$ in kWh
 
 ## Constraints:
 
@@ -237,17 +273,26 @@ $10.8 * x_A <= \text{CS}_{A,d,t} <= 13.5 * x_A$: Charge state for battery system
 
 $y_{b,A,t,d} <= e_{A,b}$: Battery can only charge if it exists
 
-$\sum_{b=1}^{B^{\max}} e_{A,b} = x_A$: Number of active batteries is the exact same as the ones needs for account $i$
+$\sum_{b=1}^{B^{\max}} e_{A,b} = x_A$: Number of active batteries is the exact same as the ones needs for account A
 
-$g_{A,t,d} = \text{Quantity}_{A,t,d}$: Energy demand must be met by battery usage
+$g_{A,t,d} = \text{Quantity}_{A,t,d}$: Energy discharged from the battery must must meet the demand for battery usage
 
-$\text{charge}_{A,d,t} <= R_{charge} * x_A$: Charge rate limit
+$\text{charge}_{A,d,t} <= R_{charge} * x_A$: The total amount of energy that can be charged into the battery system at hour $t$ on day $d$ is limited by the number of batteries and the charging rate per battery.
 
-$\text{discharge}_{A,d,t} <= R_{discharge} * x_A$: Discharge rate limit
+$\text{discharge}_{A,d,t} <= R_{discharge} * x_A$: The total amount of energy that can be discharged from the battery system at hour $t$ on day $d$ is limited by the number of batteries and the discharge rate per battery.
 
-$13.5 * x_A + \text{charge}_{A,1,0} - \text{discharge}_{A,1,0} = \text{CS}_{A,1,0}$: Initial energy within the first hour of usage
+$13.5 * x_A + \text{charge}_{A,1,0} - \text{discharge}_{A,1,0} = \text{CS}_{A,1,0}$: At the start, the total energy stored in the battery system equals the initial battery capacity plus any energy charged, minus any energy discharged. 
 
-$\text{CS}_{A,d',t'} * x_A + \text{charge}_{A,d,t} - \text{discharge}_{A,d,t} = \text{CS}_{A,d,t}$: Energy in the battery at the current time of the day after the first hour
+$\text{CS}_{A,d',t'} * x_A + \text{charge}_{A,d,t} - \text{discharge}_{A,d,t} = \text{CS}_{A,d,t}$: The energy stored in the battery system at the hour $t$ on day $d$ equals the energy stored in the previous time period plus any energy charged, minus any energy discharged.
+
+$\text{charge}_{A,b,t,d} <= R_{charge} * y_{b,A,t,d}$: The amount of energy charged into battery 
+$b$ at time $t$ on day $d$ can only be positive if the battery is currently charging
+
+$\text{discharge}_{A,b,t,d} <= R_{discharge} * (e_{A,b} - y_{b,A,t,d})$:The amount of energy discharged from battery $b$ at time $t$ on day $d$ depends on whether the battery is charging and exists
+
+$\text{charge}_{A,t,d} = \sum{b = 1} \text{charge}_{A,b,t,d}$: Charge for the sum of all batteries must equal the charge for the entire battery system
+
+$\text{discharge}_{A,t,d} = \sum_{b = 1} \text{discharge}_{A,b,t,d}$: Discharge for the sum of all batteries must equal the discharge for the entire battery system
 
 ## Notes:
 
