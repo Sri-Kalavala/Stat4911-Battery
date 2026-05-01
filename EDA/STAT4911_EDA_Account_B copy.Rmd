@@ -1,0 +1,154 @@
+---
+title: "STAT4911_EDA_Account_B"
+author: "Srinika Kalavala"
+date: "2026-05-01"
+output:
+  html_document:
+    df_print: paged
+---
+```{r, warning = FALSE, message=FALSE}
+dataset <- read.csv("/Users/srinika/Desktop/OSU/Junior Year/Spring/STAT 4911/Battery Project/battery_dataset_20260327.csv")
+library(ggplot2)
+library(dplyr)
+```
+
+
+```{r, warning = FALSE}
+account_b_data <- dataset[dataset$AccountNumber == "account_b", ]
+account_b_data$Month <- as.character(account_b_data$Month)
+
+account_b_data$Datetime_parsed <- as.POSIXct(account_b_data$Datetime,
+                                             format = "%m/%d/%y %H:%M")
+account_b_data$Hour <- as.integer(format(account_b_data$Datetime_parsed, "%H"))
+
+account_b_data$SettlementPointPrice <- account_b_data$SettlementPointPrice / 1000
+
+account_b_data$Datetime_parsed <- as.POSIXct(account_b_data$Datetime, format = "%m/%d/%y %H:%M")
+account_b_data$Hour <- as.integer(format(account_b_data$Datetime_parsed, "%H"))
+
+account_b_data$Season <- "Fall"
+account_b_data$Season[account_b_data$Month %in% c("December", "January", "February")] <- "Winter"
+account_b_data$Season[account_b_data$Month %in% c("March", "April", "May")]           <- "Spring"
+account_b_data$Season[account_b_data$Month %in% c("June", "July", "August")]          <- "Summer"
+
+account_b_data$TimeOfDay <- "Night"
+account_b_data$TimeOfDay[account_b_data$Hour >= 5  & account_b_data$Hour < 12] <- "Morning"
+account_b_data$TimeOfDay[account_b_data$Hour >= 12 & account_b_data$Hour < 17] <- "Afternoon"
+account_b_data$TimeOfDay[account_b_data$Hour >= 17 & account_b_data$Hour < 20] <- "Evening"
+
+results <- aggregate(Quantity ~ Month + Season + TimeOfDay,
+                     data = account_b_data,
+                     FUN = sum)
+
+month_levels <- c("January", "February", "March", "April", "May", "June",
+                  "July", "August", "September", "October", "November", "December")
+results$Month <- factor(results$Month, levels = month_levels)
+results <- results[order(results$Month), ]
+
+print(results)
+```
+
+```{r, warning = FALSE}
+results_b <- aggregate(Quantity ~ Month + Season + TimeOfDay,
+                       data = account_b_data, FUN = sum)
+
+month_levels <- c("January", "February", "March", "April", "May", "June",
+                  "July", "August", "September", "October", "November", "December")
+
+results_b$Month <- factor(results_b$Month, levels = month_levels)
+results_b$TimeOfDay <- factor(results_b$TimeOfDay,
+                               levels = c("Morning", "Afternoon", "Evening", "Night"))
+results_b <- results_b[order(results_b$Month), ]
+```
+
+```{r, warning = FALSE}
+ggplot(results_b, aes(x = Month, y = TimeOfDay, fill = Quantity)) +
+  geom_tile(color = "white", linewidth = 0.5) +
+  scale_fill_gradient(
+    low = "blue", high = "red",
+    labels = scales::comma,
+    name = "Total Energy\n(kWh)"
+  ) +
+  scale_x_discrete(labels = month.abb) +
+  scale_y_discrete(limits = c("Night", "Evening", "Afternoon", "Morning")) +
+  theme_minimal() +
+  theme(
+    axis.text.x  = element_text(size = 12, angle = 45, vjust = 1, hjust = 1),
+    axis.text.y  = element_text(size = 12),
+    axis.title.x = element_text(size = 13, face = "bold"),
+    axis.title.y = element_text(size = 13, face = "bold"),
+    plot.title   = element_text(size = 14, face = "bold"),
+    plot.subtitle = element_text(size = 11, color = "gray40"),
+    plot.caption  = element_text(size = 10, color = "gray50"),
+    legend.text  = element_text(size = 10),
+    legend.title = element_text(size = 11)
+  ) +
+  labs(
+    title    = "Account B: Total Hourly Energy Consumption Heatmap (May 2022 – May 2024)",
+    subtitle = "Red = high total consumption; Blue = low total consumption",
+    x        = "Month (May 2022 – May 2024)",
+    y        = "Time of Day",
+    caption  = "Aggregated sum of hourly kWh readings per month and time-of-day block"
+  )
+```
+
+```{r, warning = FALSE}
+account_b_data <- dataset[dataset$AccountNumber == "account_b", ]
+account_b_data$Month <- factor(as.character(account_b_data$Month),
+                               levels = c("January", "February", "March", "April",
+                                          "May", "June", "July", "August",
+                                          "September", "October", "November", "December"))
+
+account_b_data$Datetime_parsed <- as.POSIXct(account_b_data$Datetime, format = "%m/%d/%y %H:%M")
+account_b_data$Hour <- as.integer(format(account_b_data$Datetime_parsed, "%H"))
+
+ggplot(account_b_data, aes(x = Month, y = Quantity)) +
+  geom_violin(fill = "lightblue", color = "darkblue", alpha = 0.7) +
+  geom_boxplot(width = 0.1, fill = "white", outlier.color = "red", outlier.alpha = 0.5) +
+  theme_minimal() +
+  scale_x_discrete(labels = month.abb) +
+  scale_y_continuous(labels = scales::comma) +
+  theme(
+    axis.text.x  = element_text(size = 12, angle = 45, hjust = 1),
+    axis.text.y  = element_text(size = 12),
+    axis.title.x = element_text(size = 13, face = "bold"),
+    axis.title.y = element_text(size = 13, face = "bold"),
+    plot.title   = element_text(size = 14, face = "bold"),
+    plot.subtitle = element_text(size = 11, color = "gray40"),
+    plot.caption  = element_text(size = 10, color = "gray50")
+  ) +
+  labs(
+    title    = "Distribution of Hourly Energy Consumption by Month (Account B)",
+    subtitle = "Violin shows full distribution; box shows median and IQR; red dots are outliers",
+    x       = "Month (May 2022 – May 2024)",
+    y       = "Hourly Quantity (kWh)",
+    caption = "Each observation represents one hourly energy reading"
+  )
+```
+
+```{r, warning = FALSE, message=FALSE}
+ggplot(account_b_data, aes(x = SettlementPointPrice, y = Quantity)) +
+  geom_point(color = "blue", alpha = 0.3) +
+  geom_smooth(method = "loess", color = "red", se = FALSE) +
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "white"),
+    plot.background  = element_rect(fill = "white"),
+    panel.grid.major = element_line(color = "lightblue"),
+    panel.grid.minor = element_line(color = "lightblue"),
+    axis.text.x  = element_text(size = 12),
+    axis.text.y  = element_text(size = 12),
+    axis.title.x = element_text(size = 13, face = "bold"),
+    axis.title.y = element_text(size = 13, face = "bold"),
+    plot.title    = element_text(size = 14, face = "bold"),
+    plot.subtitle = element_text(size = 11, color = "gray40"),
+    plot.caption  = element_text(size = 10, color = "gray50")
+  ) +
+  labs(
+    title    = "Energy Consumption vs. Settlement Price (Account B)",
+    subtitle = "Red line shows LOESS trend; each point represents one hourly observation",
+    x        = "Settlement Point Price ($/kWh)",
+    y        = "Quantity (kWh)",
+    caption  = "Note: Price converted from $/MWh to $/kWh"
+  )
+```
