@@ -129,6 +129,9 @@ ggplot(quant_avg, aes(x = TimeOfDay, y = avg_quantity, fill = TimeOfDay)) +
 geom_col() + labs(title = "Average Quantity by Time of Day",
 x = "Time of Day", y = "Average Quantity") + theme_minimal()
 ```
+```{r}
+quant_avg
+```
 
 ```{r}
 # Plot energy used by time of day
@@ -229,7 +232,7 @@ account_b = subset(account_b, Settlement.Point.Price.KWH >= lower_bound
 ```
 
 ```{r}
-View(account_b)
+#write.csv(account_b, "account_b.csv", row.names = FALSE)
 ```
 
 
@@ -269,7 +272,7 @@ $R_{discharge}$ = Discharge rate per battery of the Tesla Powerwall $3$ in kWh
 
 ## Constraints:
 
-$10.8 * x_A <= \text{CS}_{A,d,t} <= 13.5 * x_A$: Charge state for battery system through 2 weeks must must be at a minimum $80\%$ 
+$2.7 * x_A <= \text{CS}_{A,d,t} <= 13.5 * x_A$: Charge state for battery system through 2 weeks must must be at a minimum $80\%$ 
 
 $y_{b,A,t,d} <= e_{A,b}$: Battery can only charge if it exists
 
@@ -301,3 +304,380 @@ $d',t'$ = Indicates previous day and previous hour in time
 ## Objective Function:
 
 $min(\sum_{d = 1}^{14} \sum_{t = 0}^{23} (\text{charge}_{A,d,t} \cdot \text{Price}_{t,d}) + x_A * C_{battery})$
+
+```{r}
+opt_A = read.csv("battery_schedule_AcctA_fulldataset.csv")
+```
+
+```{r warning = FALSE}
+opt_A$Datetime = ymd_hms(opt_A$Datetime)
+
+opt_A$Season = factor(
+  case_when(
+    month(opt_A$Datetime) %in% c(3,4,5) ~ "Spring",
+    month(opt_A$Datetime) %in% c(6,7,8) ~ "Summer",
+    month(opt_A$Datetime) %in% c(9,10,11) ~ "Fall",
+    TRUE ~ "Winter"
+  ),
+  levels = c("Spring", "Summer", "Fall", "Winter")
+)
+
+opt_A$Time = format(opt_A$Datetime, "%H:%M")
+
+opt_A$TimeOfDay = with(opt_A, ifelse(
+  Time > "05:00" & Time <= "12:00", "Morning",
+  ifelse(Time > "12:00" & Time <= "17:00", "Afternoon",
+  ifelse(Time > "17:00" & Time <= "20:00", "Evening",
+  "Night"))))
+```
+
+```{r}
+opt_B = read.csv("battery_schedule_AcctB_fulldataset.csv")
+```
+
+```{r warning = FALSE}
+opt_B$Datetime = ymd_hms(opt_B$Datetime)
+
+opt_B$Season = factor(
+  case_when(
+    month(opt_B$Datetime) %in% c(3,4,5) ~ "Spring",
+    month(opt_B$Datetime) %in% c(6,7,8) ~ "Summer",
+    month(opt_B$Datetime) %in% c(9,10,11) ~ "Fall",
+    TRUE ~ "Winter"
+  ),
+  levels = c("Spring", "Summer", "Fall", "Winter")
+)
+
+opt_B$Time = format(opt_B$Datetime, "%H:%M")
+
+opt_B$TimeOfDay = with(opt_B, ifelse(
+  Time > "05:00" & Time <= "12:00", "Morning",
+  ifelse(Time > "12:00" & Time <= "17:00", "Afternoon",
+  ifelse(Time > "17:00" & Time <= "20:00", "Evening",
+  "Night"))))
+```
+
+```{r}
+# Filter for June 2022
+jan_data <- opt_A %>%
+  filter(Datetime >= ymd("2023-01-01"),
+         Datetime <  ymd("2023-02-01")) %>%
+  mutate(
+    TimeOfDay = hour(Datetime) + minute(Datetime)/60
+  )
+
+# Plot time of day by action
+ggplot(jan_data, aes(x = TimeOfDay, fill = Action)) +
+  geom_histogram(binwidth = 1, alpha = 0.7, position = "identity") +
+  scale_x_continuous(breaks = 0:23) +
+  labs(
+    title = "Battery Charging vs. Discharging by Hour of Day (January 2023)",
+    x = "Hour of Day",
+    y = "Count",
+    fill = "Action"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+# Filter for June 2022
+april_data <- opt_A %>%
+  filter(Datetime >= ymd("2023-04-01"),
+         Datetime <  ymd("2023-05-01")) %>%
+  mutate(
+    TimeOfDay = hour(Datetime) + minute(Datetime)/60
+  )
+
+# Plot time of day by action
+ggplot(april_data, aes(x = TimeOfDay, fill = Action)) +
+  geom_histogram(binwidth = 1, alpha = 0.7, position = "identity") +
+  scale_x_continuous(breaks = 0:23) +
+  labs(
+    title = "Battery Charging vs. Discharging by Hour of Day (April 2023)",
+    x = "Hour of Day",
+    y = "Count",
+    fill = "Action"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+# Filter for June 2022
+july_data <- opt_A %>%
+  filter(Datetime >= ymd("2023-07-01"),
+         Datetime <  ymd("2023-08-01")) %>%
+  mutate(
+    TimeOfDay = hour(Datetime) + minute(Datetime)/60
+  )
+
+# Plot time of day by action
+ggplot(july_data, aes(x = TimeOfDay, fill = Action)) +
+  geom_histogram(binwidth = 1, alpha = 0.7, position = "identity") +
+  scale_x_continuous(breaks = 0:23) +
+  labs(
+    title = "Battery Charging vs. Discharging by Hour of Day (July 2023)",
+    x = "Hour of Day",
+    y = "Count",
+    fill = "Action"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+# Filter for June 2022
+october_data <- opt_A %>%
+  filter(Datetime >= ymd("2023-10-01"),
+         Datetime <  ymd("2023-11-01")) %>%
+  mutate(
+    TimeOfDay = hour(Datetime) + minute(Datetime)/60
+  )
+
+# Plot time of day by action
+ggplot(october_data, aes(x = TimeOfDay, fill = Action)) +
+  geom_histogram(binwidth = 1, alpha = 0.7, position = "identity") +
+  scale_x_continuous(breaks = 0:23) +
+  labs(
+    title = "Battery Charging vs. Discharging by Hour of Day (October 2023)",
+    x = "Hour of Day",
+    y = "Count",
+    fill = "Action"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+# Count occurrences for each Season × TimeOfDay × Action
+heat_data <- opt_A %>%
+  count(Season, TimeOfDay, Action)
+
+# Heatmap
+ggplot(heat_data, aes(x = TimeOfDay, y = Season, fill = n)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "#deebf7", high = "#08519c") +
+  facet_wrap(~ Action, ncol = 1) +
+  labs(
+    title = "Charging vs. Discharging by Time of Day And Season",
+    caption = "Account A",
+    x = "Time of Day",
+    y = "Season",
+    fill = "Count"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    plot.subtitle = element_text(color = "gray30"),
+    strip.text = element_text(face = "bold"),
+    panel.grid = element_blank()
+  )
+```
+
+```{r}
+ggplot(opt_A, aes(x = TimeOfDay, y = Hourly_Savings)) +
+  stat_summary(fun = mean, geom = "line", aes(group = 1), color = "#1F78B4", size = 1) +
+  stat_summary(fun.data = mean_cl_normal, geom = "errorbar", width = 0.2) +
+  stat_summary(fun = mean, geom = "point", size = 3, color = "#1F78B4") +
+  facet_wrap(~ Season, ncol = 2) +
+  coord_cartesian(ylim = c(-3, 3)) +
+  labs(
+    title = "Average Hourly Savings by Time of Day Across Seasons",
+    caption = "Account A",
+    x = "Time of Day",
+    y = "Hourly Savings ($)"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    strip.text = element_text(face = "bold")
+  )
+```
+
+```{r}
+# Count occurrences for each Season × TimeOfDay × Action
+heat_data <- opt_B %>%
+  count(Season, TimeOfDay, Action)
+
+# Heatmap
+ggplot(heat_data, aes(x = TimeOfDay, y = Season, fill = n)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "#deebf7", high = "#08519c") +
+  facet_wrap(~ Action, ncol = 1) +
+  labs(
+    title = "Charging vs. Discharging by Time of Day And Season",
+    caption = "Account B",
+    x = "Time of Day",
+    y = "Season",
+    fill = "Count"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    plot.subtitle = element_text(color = "gray30"),
+    strip.text = element_text(face = "bold"),
+    panel.grid = element_blank()
+  )
+```
+
+```{r}
+ggplot(opt_B, aes(x = TimeOfDay, y = Hourly_Savings)) +
+  stat_summary(fun = mean, geom = "line", aes(group = 1), color = "#1F78B4", size = 1) +
+  stat_summary(fun.data = mean_cl_normal, geom = "errorbar", width = 0.2) +
+  stat_summary(fun = mean, geom = "point", size = 3, color = "#1F78B4") +
+  facet_wrap(~ Season, ncol = 2) +
+  coord_cartesian(ylim = c(-4, 4)) +
+  labs(
+    title = "Average Hourly Savings by Time of Day Across Seasons",
+    caption = "Account B",
+    x = "Time of Day",
+    y = "Hourly Savings ($)"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    strip.text = element_text(face = "bold")
+  )
+```
+
+```{r}
+opt_A = read.csv("battery_schedule_AcctA_fulldataset2.csv")
+```
+
+```{r warning = FALSE}
+opt_A$Datetime = ymd_hms(opt_A$Datetime)
+
+opt_A$Season = factor(
+  case_when(
+    month(opt_A$Datetime) %in% c(3,4,5) ~ "Spring",
+    month(opt_A$Datetime) %in% c(6,7,8) ~ "Summer",
+    month(opt_A$Datetime) %in% c(9,10,11) ~ "Fall",
+    TRUE ~ "Winter"
+  ),
+  levels = c("Spring", "Summer", "Fall", "Winter")
+)
+
+opt_A$Time = format(opt_A$Datetime, "%H:%M")
+
+opt_A$TimeOfDay = with(opt_A, ifelse(
+  Time > "05:00" & Time <= "12:00", "Morning",
+  ifelse(Time > "12:00" & Time <= "17:00", "Afternoon",
+  ifelse(Time > "17:00" & Time <= "20:00", "Evening",
+  "Night"))))
+```
+
+```{r}
+opt_B = read.csv("battery_schedule_AcctB_fulldataset2.csv")
+```
+
+```{r warning = FALSE}
+opt_B$Datetime = ymd_hms(opt_B$Datetime)
+
+opt_B$Season = factor(
+  case_when(
+    month(opt_B$Datetime) %in% c(3,4,5) ~ "Spring",
+    month(opt_B$Datetime) %in% c(6,7,8) ~ "Summer",
+    month(opt_B$Datetime) %in% c(9,10,11) ~ "Fall",
+    TRUE ~ "Winter"
+  ),
+  levels = c("Spring", "Summer", "Fall", "Winter")
+)
+
+opt_B$Time = format(opt_B$Datetime, "%H:%M")
+
+opt_B$TimeOfDay = with(opt_B, ifelse(
+  Time > "05:00" & Time <= "12:00", "Morning",
+  ifelse(Time > "12:00" & Time <= "17:00", "Afternoon",
+  ifelse(Time > "17:00" & Time <= "20:00", "Evening",
+  "Night"))))
+```
+
+```{r}
+# Count occurrences for each Season × TimeOfDay × Action
+heat_data <- opt_A %>%
+  count(Season, TimeOfDay, Action)
+
+# Heatmap
+ggplot(heat_data, aes(x = TimeOfDay, y = Season, fill = n)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "#deebf7", high = "#08519c") +
+  facet_wrap(~ Action, ncol = 1) +
+  labs(
+    title = "Charging vs. Discharging by Time of Day And Season",
+    caption = "Account A",
+    x = "Time of Day",
+    y = "Season",
+    fill = "Count"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    plot.subtitle = element_text(color = "gray30"),
+    strip.text = element_text(face = "bold"),
+    panel.grid = element_blank()
+  )
+```
+
+```{r}
+ggplot(opt_A, aes(x = TimeOfDay, y = Hourly_Savings)) +
+  stat_summary(fun = mean, geom = "line", aes(group = 1), color = "#1F78B4", size = 1) +
+  stat_summary(fun.data = mean_cl_normal, geom = "errorbar", width = 0.2) +
+  stat_summary(fun = mean, geom = "point", size = 3, color = "#1F78B4") +
+  facet_wrap(~ Season, ncol = 2) +
+  coord_cartesian(ylim = c(-4, 4)) +
+  labs(
+    title = "Average Hourly Savings by Time of Day Across Seasons",
+    caption = "Account A",
+    x = "Time of Day",
+    y = "Hourly Savings ($)"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    strip.text = element_text(face = "bold")
+  )
+```
+
+```{r}
+# Count occurrences for each Season × TimeOfDay × Action
+heat_data <- opt_B %>%
+  count(Season, TimeOfDay, Action)
+
+# Heatmap
+ggplot(heat_data, aes(x = TimeOfDay, y = Season, fill = n)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "#deebf7", high = "#08519c") +
+  facet_wrap(~ Action, ncol = 1) +
+  labs(
+    title = "Charging vs. Discharging by Time of Day And Season",
+    caption = "Account B",
+    x = "Time of Day",
+    y = "Season",
+    fill = "Count"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    plot.subtitle = element_text(color = "gray30"),
+    strip.text = element_text(face = "bold"),
+    panel.grid = element_blank()
+  )
+```
+
+```{r}
+ggplot(opt_B, aes(x = TimeOfDay, y = Hourly_Savings)) +
+  stat_summary(fun = mean, geom = "line", aes(group = 1), color = "#1F78B4", size = 1) +
+  stat_summary(fun.data = mean_cl_normal, geom = "errorbar", width = 0.2) +
+  stat_summary(fun = mean, geom = "point", size = 3, color = "#1F78B4") +
+  facet_wrap(~ Season, ncol = 2) +
+  coord_cartesian(ylim = c(-4, 4)) +
+  labs(
+    title = "Average Hourly Savings by Time of Day Across Seasons",
+    caption = "Account B",
+    x = "Time of Day",
+    y = "Hourly Savings ($)"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    strip.text = element_text(face = "bold")
+  )
+```
+
